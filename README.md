@@ -1,6 +1,11 @@
 # Driver Drowsiness Detection System
 
 Real-time driver drowsiness detection using MediaPipe Face Mesh, EAR/PERCLOS eye tracking, and MAR-based yawn detection, with a live WebSocket dashboard.
+## Two Architectures
+
+**A — CNN Baseline:** Crops the eye region from each frame and classifies it as open/closed using a trained CNN. Requires training data and only judges a single frame at a time.
+
+**B — MediaPipe Geometric (used in the live system):** Extracts facial landmarks with MediaPipe, computes EAR (eye closure) and MAR (yawn) from geometry, then tracks these over a rolling time window (PERCLOS + yawn rate) to fuse them into a drowsiness state. No training required — runs in real time on CPU.
 
 ## Screenshots
 <img width="1488" height="844" alt="image" src="https://github.com/user-attachments/assets/3e744146-b710-4e02-86a7-765ba19b0fe9" />
