@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Drowsiness Detection — Driver Monitor</title>
+<style>
+  /* ── Reset & base ───────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --border:   #2a2d3a;
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --alert:    #22c55e;
+    --warning:  #f59e0b;
+    --drowsy:   #f97316;
+    --critical: #ef4444;
+    --blue:     #3b82f6;
+    --accent:   #6366f1;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif; font-size: 14px; }
+
+  /* ── Login page ─────────────────────────────────────────────────────── */
+  #login-page {
+    min-height: 100vh; display: flex;
+    align-items: center; justify-content: center;
+    background: #f8fafc;
+  }
+  .login-card {
+    background: #fff; border-radius: 20px;
+    padding: 36px 40px; width: 420px; max-width: 90vw;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+  }
+  .login-header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+  .login-icon {
+    width: 54px; height: 54px; border-radius: 14px;
+    background: linear-gradient(135deg, #6366f1, #3b82f6);
+    display: flex; align-items: center; justify-content: center; font-size: 26px;
+  }
+  .login-title { font-size: 20px; font-weight: 700; color: #111; }
+  .login-sub   { font-size: 13px; color: #6b7280; margin-top: 2px; }
+  .login-label { font-size: 13px; font-weight: 600; color: #111;
+    display: block; margin-bottom: 8px; }
+  .login-input-wrap {
+    display: flex; align-items: center; gap: 10px;
+    border: 1.5px solid #e5e7eb; border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 16px;
+  }
+  .login-input-wrap input {
+    flex: 1; border: none; outline: none;
+    font-size: 15px; background: transparent; color: #111;
+  }
+  #login-btn {
+    width: 100%; padding: 13px; border-radius: 10px; border: none;
+    background: linear-gradient(135deg, #6366f1, #3b82f6);
+    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: opacity .2s;
+  }
+  #login-btn:disabled { background: #9ca3af; cursor: default; }
+  .login-note { text-align: center; font-size: 12px; color: #6366f1;
+    margin-top: 18px; line-height: 1.5; }
+
+  /* ── Dashboard page ─────────────────────────────────────────────────── */
+  #dashboard-page { display: none; min-height: 100vh; }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 10;
+  }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .header-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #3b82f6);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .header-title { font-size: 14px; font-weight: 700; }
+  .header-sub   { font-size: 11px; color: var(--muted); }
+  #switch-btn {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); font-size: 12px; padding: 5px 12px;
+    border-radius: 6px; cursor: pointer;
+  }
+
+  /* Body layout */
+  .body { max-width: 1200px; margin: 0 auto; padding: 20px 20px 40px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media(max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  /* Panel */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .panel-body { padding: 14px 18px; }
+  .panel-title {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 10px;
+  }
+
+  /* Camera panel */
+  .camera-wrap {
+    position: relative; background: #08090f;
+    aspect-ratio: 4/3; overflow: hidden;
+  }
+  #camera-video {
+    width: 100%; height: 100%; object-fit: cover; display: none;
+  }
+  .camera-off {
+    position: absolute; inset: 0; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  }
+  .camera-off-icon { font-size: 48px; opacity: .3; }
+  .camera-off-txt  { font-size: 13px; color: var(--muted); }
+  .camera-overlay  {
+    position: absolute; inset: 0; pointer-events: none;
+    transition: box-shadow .4s, border-color .4s;
+  }
+  #rec-badge {
+    position: absolute; top: 10px; left: 10px; display: none;
+    align-items: center; gap: 6px;
+    background: rgba(0,0,0,.6); border-radius: 999px; padding: 4px 10px;
+  }
+  .rec-dot { width: 7px; height: 7px; border-radius: 50%;
+    background: var(--critical); animation: pulse 1s infinite; }
+  .rec-txt { font-size: 11px; font-weight: 600; }
+  #state-overlay {
+    position: absolute; top: 10px; right: 10px; display: none;
+  }
+
+  /* Controls */
+  .controls {
+    padding: 12px 16px; border-top: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .btn {
+    padding: 7px 16px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-blue     { background: var(--blue); }
+  .btn-green    { background: var(--alert); }
+  .btn-red      { background: var(--critical); }
+  .btn-ghost    {
+    background: transparent; border: 1px solid var(--muted);
+    color: var(--muted);
+  }
+  #session-timer { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+  /* Alert banner */
+  #alert-banner {
+    display: none; padding: 12px 20px;
+    font-size: 15px; font-weight: 700;
+    border-bottom: 1px solid transparent;
+  }
+
+  /* Connection badge */
+  #conn-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+    background: var(--surface); margin-bottom: 14px;
+  }
+  .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+
+  /* Metric cards row */
+  .metric-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .metric-card {
+    flex: 1; min-width: 110px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .metric-lbl  { font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 4px; }
+  .metric-val  { font-size: 24px; font-weight: 700; line-height: 1.1; }
+  .metric-sub  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  canvas.spark { display: block; margin-top: 8px; }
+
+  /* PERCLOS bar */
+  .bar-wrap {
+    position: relative; height: 8px; background: #2a2d3a;
+    border-radius: 4px; overflow: visible; margin-bottom: 6px;
+  }
+  #perclos-fill {
+    height: 100%; border-radius: 4px; width: 0%;
+    transition: width .3s, background .3s;
+  }
+  .bar-marker {
+    position: absolute; top: -3px; width: 1px; height: 14px;
+    background: rgba(255,255,255,.5);
+  }
+  .bar-labels { display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--muted); }
+
+  /* State badge */
+  .state-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 14px; border-radius: 999px; font-weight: 700;
+    font-size: 12px; letter-spacing: .07em; border: 1.5px solid transparent;
+  }
+
+  /* Alert log */
+  #alert-log { max-height: 160px; overflow-y: auto; }
+  .log-entry {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; margin-bottom: 6px;
+    border: 1px solid transparent;
+  }
+  .log-state { font-size: 12px; font-weight: 600; }
+  .log-detail { font-size: 11px; color: var(--muted); }
+
+  /* Past sessions */
+  #sessions-list .session-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .sess-name  { font-size: 13px; }
+  .sess-date  { font-size: 11px; color: var(--muted); }
+
+  /* Fusion tags */
+  .fusion-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ftag {
+    font-size: 10px; padding: 3px 8px; border-radius: 999px;
+    border: 1px solid transparent;
+  }
+
+  /* Scroll */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     LOGIN PAGE
+═══════════════════════════════════════════════════════════════════ -->
+<div id="login-page">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-icon">🧠</div>
+      <div>
+        <div class="login-title">Drowsiness Detection</div>
+        <div class="login-sub">Driver Monitoring Demo</div>
+      </div>
+    </div>
+    <label class="login-label" for="driver-input">Driver Name</label>
+    <div class="login-input-wrap">
+      <span style="font-size:18px;color:#9ca3af">👤</span>
+      <input id="driver-input" type="text" placeholder="Enter driver's name" autocomplete="off" />
+    </div>
+    <button id="login-btn" disabled>Continue</button>
+    <p class="login-note">
+      The camera feed is processed in your browser.<br>
+      Your OpenCV detection logic plugs in via WebSocket.
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     DASHBOARD PAGE
+═══════════════════════════════════════════════════════════════════ -->
+<div id="dashboard-page">
+
+  <!-- Alert banner (top) -->
+  <div id="alert-banner"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-icon">🧠</div>
+      <div>
+        <div class="header-title">Driver Monitor</div>
+        <div class="header-sub" id="header-driver">Driver: —</div>
+      </div>
+    </div>
+    <button id="switch-btn">Switch Driver</button>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <div class="grid">
+
+      <!-- ── LEFT COLUMN ── -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <!-- Camera panel -->
+        <div class="panel" id="camera-panel" style="border-color:var(--border);transition:border-color .4s">
+          <div class="camera-wrap">
+            <video id="camera-video" autoplay playsinline muted></video>
+            <div class="camera-off" id="camera-off">
+              <div class="camera-off-icon">📷</div>
+              <div class="camera-off-txt">Camera is off</div>
+            </div>
+            <div class="camera-overlay" id="camera-overlay"></div>
+            <div id="rec-badge">
+              <div class="rec-dot"></div>
+              <span class="rec-txt">REC</span>
+            </div>
+            <div id="state-overlay"></div>
+          </div>
+          <div class="controls">
+            <button class="btn btn-blue" id="cam-btn" onclick="openCamera()">📷 Open Camera</button>
+            <button class="btn btn-green" id="mon-btn" onclick="toggleMonitoring()" style="display:none">▶ Start Monitoring</button>
+            <button class="btn btn-ghost" id="close-btn" onclick="closeCamera()" style="display:none">Close Camera</button>
+            <span id="session-timer">Not monitoring</span>
+          </div>
+          <div id="cam-error" style="display:none;margin:0 16px 12px;padding:6px 10px;background:#450a0a;border-radius:6px;font-size:12px;color:var(--critical)"></div>
+        </div>
+
+        <!-- Past sessions -->
+        <div class="panel">
+          <div class="panel-body">
+            <div class="panel-title" style="color:var(--blue);display:flex;align-items:center;gap:6px">
+              🕓 Past Sessions
+            </div>
+            <div id="sessions-list">
+              <div style="font-size:13px;color:var(--muted);text-align:center;padding:16px 0">No past sessions yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── RIGHT COLUMN ── -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <!-- Connection badge -->
+        <div id="conn-badge">
+          <div class="conn-dot" id="conn-dot"></div>
+          <span id="conn-txt">Not connected — run websocket_server.py then Start Monitoring</span>
+        </div>
+
+        <!-- Metric cards -->
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-lbl">👁 EAR</div>
+            <div class="metric-val" id="val-ear" style="color:var(--alert)">0.000</div>
+            <div class="metric-sub" id="sub-ear">Eye open</div>
+            <canvas class="spark" id="spark-ear" width="120" height="36"></canvas>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">👄 MAR</div>
+            <div class="metric-val" id="val-mar" style="color:var(--alert)">0.000</div>
+            <div class="metric-sub" id="sub-mar">Normal</div>
+            <canvas class="spark" id="spark-mar" width="120" height="36"></canvas>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">📊 PERCLOS</div>
+            <div class="metric-val" id="val-perclos" style="color:var(--alert)">0.0%</div>
+            <div class="metric-sub" id="sub-perclos">Normal</div>
+            <canvas class="spark" id="spark-perclos" width="120" height="36"></canvas>
+          </div>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-lbl">✦ Blinks</div>
+            <div class="metric-val" id="val-blinks">0</div>
+            <div class="metric-sub">session total</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">💤 Yawns</div>
+            <div class="metric-val" id="val-yawns">0</div>
+            <div class="metric-sub" id="sub-yawnrate">0/min</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">⚡ FPS</div>
+            <div class="metric-val" id="val-fps">0</div>
+            <div class="metric-sub" id="sub-face">No face</div>
+          </div>
+        </div>
+
+        <!-- PERCLOS bar -->
+        <div class="panel">
+          <div class="panel-body">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span class="panel-title" style="margin:0">PERCLOS — Rolling 60s Window</span>
+              <div class="state-badge" id="state-badge">✓ ALERT</div>
+            </div>
+            <div class="bar-wrap">
+              <div id="perclos-fill"></div>
+              <div class="bar-marker" style="left:40%"></div>
+              <div class="bar-marker" style="left:70%"></div>
+            </div>
+            <div class="bar-labels">
+              <span>0%</span>
+              <span style="color:var(--warning)">40% drowsy</span>
+              <span style="color:var(--critical)">70% critical</span>
+              <span>100%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert log -->
+        <div class="panel">
+          <div class="panel-body">
+            <div class="panel-title">Alert Log</div>
+            <div id="alert-log">
+              <div style="font-size:13px;color:var(--muted);text-align:center;padding:16px 0">
+                No alerts yet — driver is alert.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fusion logic tags -->
+        <div class="panel">
+          <div class="panel-body">
+            <div class="panel-title">Temporal Fusion Signals</div>
+            <div class="fusion-tags">
+              <span class="ftag" style="color:var(--warning);border-color:#f59e0b40;background:#f59e0b10">PERCLOS &gt; 40%</span>
+              <span class="ftag" style="color:var(--critical);border-color:#ef444440;background:#ef444410">PERCLOS &gt; 70%</span>
+              <span class="ftag" style="color:var(--warning);border-color:#f59e0b40;background:#f59e0b10">Yawns ≥ 2/min</span>
+              <span class="ftag" style="color:var(--critical);border-color:#ef444440;background:#ef444410">Yawns ≥ 4/min</span>
+              <span class="ftag" style="color:var(--drowsy);border-color:#f9731640;background:#f9731610">EAR &lt; 0.14</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end right col -->
+    </div><!-- end grid -->
+  </div><!-- end body -->
+</div><!-- end dashboard -->
+
+<!-- ══════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════════════ -->
+<script>
+// ── Config (mirrors Python CFG) ──────────────────────────────────────────────
+const CFG = {
+  EAR_THRESHOLD    : 0.20,
+  MAR_THRESHOLD    : 0.60,
+  PERCLOS_DROWSY   : 0.40,
+  PERCLOS_CRITICAL : 0.70,
+  YAWN_RATE_WARNING: 2,
+  WS_URL           : "ws://localhost:8765/ws",
+  ALERT_COOLDOWN_MS: 5000,
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let driverName    = "";
+let cameraOn      = false;
+let isMonitoring  = false;
+let ws            = null;
+let sessionStart  = null;
+let timerInterval = null;
+let lastAlertMs   = 0;
+let sessionCount  = 0;
+let peakState     = "ALERT";
+let streamRef     = null;
+
+// Sparkline history buffers
+const HIST = 50;
+const earBuf     = new Array(HIST).fill(0);
+const marBuf     = new Array(HIST).fill(0);
+const perclosBuf = new Array(HIST).fill(0);
+
+// ── Login ────────────────────────────────────────────────────────────────────
+const driverInput = document.getElementById("driver-input");
+const loginBtn    = document.getElementById("login-btn");
+
+driverInput.addEventListener("input", () => {
+  loginBtn.disabled = driverInput.value.trim() === "";
+});
+driverInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !loginBtn.disabled) login();
+});
+loginBtn.addEventListener("click", login);
+
+function login() {
+  driverName = driverInput.value.trim();
+  document.getElementById("login-page").style.display = "none";
+  document.getElementById("dashboard-page").style.display = "block";
+  document.getElementById("header-driver").textContent = "Driver: " + driverName;
+}
+
+document.getElementById("switch-btn").addEventListener("click", () => {
+  closeCamera();
+  document.getElementById("dashboard-page").style.display = "none";
+  document.getElementById("login-page").style.display = "flex";
+  driverInput.value = "";
+  loginBtn.disabled = true;
+});
+
+// ── Camera ───────────────────────────────────────────────────────────────────
+async function openCamera() {
+  const errEl = document.getElementById("cam-error");
+  errEl.style.display = "none";
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false
+    });
+    streamRef = stream;
+    const video = document.getElementById("camera-video");
+    video.srcObject = stream;
+    video.style.display = "block";
+    document.getElementById("camera-off").style.display = "none";
+    cameraOn = true;
+
+    document.getElementById("cam-btn").style.display  = "none";
+    document.getElementById("mon-btn").style.display  = "inline-block";
+    document.getElementById("close-btn").style.display = "inline-block";
+  } catch (err) {
+    errEl.textContent = "⚠ " + (err.message || "Could not access camera.");
+    errEl.style.display = "block";
+  }
+}
+
+function closeCamera() {
+  if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
+  const video = document.getElementById("camera-video");
+  video.srcObject = null;
+  video.style.display = "none";
+  document.getElementById("camera-off").style.display = "flex";
+  cameraOn = false;
+
+  if (isMonitoring) stopMonitoring();
+  document.getElementById("cam-btn").style.display   = "inline-block";
+  document.getElementById("mon-btn").style.display   = "none";
+  document.getElementById("close-btn").style.display = "none";
+  document.getElementById("cam-error").style.display = "none";
+}
+
+// ── Monitoring ───────────────────────────────────────────────────────────────
+function toggleMonitoring() {
+  isMonitoring ? stopMonitoring() : startMonitoring();
+}
+
+function startMonitoring() {
+  isMonitoring = true;
+  sessionStart = Date.now();
+  peakState    = "ALERT";
+
+  const monBtn = document.getElementById("mon-btn");
+  monBtn.textContent = "⏹ Stop Monitoring";
+  monBtn.className   = "btn btn-red";
+
+  document.getElementById("rec-badge").style.display    = "flex";
+  document.getElementById("state-overlay").style.display = "block";
+
+  timerInterval = setInterval(updateTimer, 1000);
+
+  connectWebSocket();
+}
+
+function stopMonitoring() {
+  isMonitoring = false;
+
+  const monBtn = document.getElementById("mon-btn");
+  monBtn.textContent = "▶ Start Monitoring";
+  monBtn.className   = "btn btn-green";
+
+  document.getElementById("rec-badge").style.display     = "none";
+  document.getElementById("state-overlay").style.display = "none";
+  document.getElementById("session-timer").textContent   = "Not monitoring";
+  document.getElementById("alert-banner").style.display  = "none";
+
+  clearInterval(timerInterval);
+
+  if (ws) { ws.close(); ws = null; }
+  setConnected(false);
+
+  // Save session
+  if (sessionStart) {
+    const dur = Math.round((Date.now() - sessionStart) / 1000);
+    if (dur > 5) addSession(dur, peakState);
+    sessionStart = null;
+  }
+
+  resetCameraBorder();
+}
+
+function updateTimer() {
+  if (!sessionStart) return;
+  const secs = Math.floor((Date.now() - sessionStart) / 1000);
+  const m = String(Math.floor(secs / 60)).padStart(2, "0");
+  const s = String(secs % 60).padStart(2, "0");
+  document.getElementById("session-timer").textContent = "⏱ " + m + ":" + s;
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWebSocket() {
+  try {
+    ws = new WebSocket(CFG.WS_URL);
+  } catch (e) {
+    setConnected(false); return;
+  }
+
+  ws.onopen = () => setConnected(true);
+
+  ws.onmessage = (event) => {
+    let d;
+    try { d = JSON.parse(event.data); } catch { return; }
+    updateDashboard(d);
+  };
+
+  ws.onclose = () => {
+    setConnected(false);
+    // Auto-reconnect every 2s while monitoring
+    if (isMonitoring) setTimeout(connectWebSocket, 2000);
+  };
+
+  ws.onerror = () => { ws.close(); };
+}
+
+function setConnected(on) {
+  const dot = document.getElementById("conn-dot");
+  const txt = document.getElementById("conn-txt");
+  const badge = document.getElementById("conn-badge");
+  if (on) {
+    dot.style.background = "var(--alert)";
+    badge.style.borderColor = "var(--alert)";
+    badge.style.color = "var(--alert)";
+    badge.style.background = "#052e16";
+  } else {
+    dot.style.background = "var(--muted)";
+    badge.style.borderColor = "var(--border)";
+    badge.style.color = "var(--muted)";
+    badge.style.background = "var(--surface)";
+    txt.textContent = "Not connected — run websocket_server.py then Start Monitoring";
+  }
+}
+
+// ── Dashboard update ─────────────────────────────────────────────────────────
+function updateDashboard(d) {
+  // Unpack
+  const ear        = d.ear        || 0;
+  const mar        = d.mar        || 0;
+  const perclos    = d.perclos    || 0;
+  const blinks     = d.blinks     || 0;
+  const yawns      = d.yawns      || 0;
+  const yawnRate   = d.yawn_rate  || 0;
+  const state      = d.drowsy_state || "ALERT";
+  const fps        = d.fps        || 0;
+  const faceDet    = d.face_detected || false;
+
+  // Update conn badge text
+  document.getElementById("conn-txt").textContent =
+    `Live · ${fps} FPS · ${faceDet ? "Face detected" : "No face"}`;
+
+  // Histories
+  earBuf.push(ear);       earBuf.shift();
+  marBuf.push(mar);       marBuf.shift();
+  perclosBuf.push(perclos); perclosBuf.shift();
+
+  // EAR card
+  const earColor = ear < CFG.EAR_THRESHOLD ? "var(--critical)" : "var(--alert)";
+  document.getElementById("val-ear").textContent = ear.toFixed(3);
+  document.getElementById("val-ear").style.color = earColor;
+  document.getElementById("sub-ear").textContent = ear < CFG.EAR_THRESHOLD ? "⚠ Eye closed" : "Eye open";
+  drawSparkline("spark-ear", earBuf, ear < CFG.EAR_THRESHOLD ? "#ef4444" : "#22c55e");
+
+  // MAR card
+  const marColor = mar > CFG.MAR_THRESHOLD ? "var(--warning)" : "var(--alert)";
+  document.getElementById("val-mar").textContent = mar.toFixed(3);
+  document.getElementById("val-mar").style.color = marColor;
+  document.getElementById("sub-mar").textContent = mar > CFG.MAR_THRESHOLD ? "Yawning" : "Normal";
+  drawSparkline("spark-mar", marBuf, "#f59e0b");
+
+  // PERCLOS card
+  const pColor = perclos > CFG.PERCLOS_CRITICAL ? "var(--critical)"
+               : perclos > CFG.PERCLOS_DROWSY   ? "var(--drowsy)"
+               : "var(--alert)";
+  document.getElementById("val-perclos").textContent = (perclos * 100).toFixed(1) + "%";
+  document.getElementById("val-perclos").style.color = pColor;
+  document.getElementById("sub-perclos").textContent =
+    perclos > CFG.PERCLOS_CRITICAL ? "Critical" :
+    perclos > CFG.PERCLOS_DROWSY   ? "Drowsy zone" : "Normal";
+  drawSparkline("spark-perclos", perclosBuf, "#6366f1");
+
+  // Counters
+  document.getElementById("val-blinks").textContent  = blinks;
+  document.getElementById("val-yawns").textContent   = yawns;
+  document.getElementById("sub-yawnrate").textContent = yawnRate.toFixed(1) + "/min";
+  document.getElementById("val-fps").textContent     = fps.toFixed(1);
+  document.getElementById("sub-face").textContent    = faceDet ? "Face detected" : "No face";
+
+  // PERCLOS bar
+  const barFill = document.getElementById("perclos-fill");
+  barFill.style.width = Math.min(perclos * 100, 100) + "%";
+  barFill.style.background = perclos > CFG.PERCLOS_CRITICAL ? "var(--critical)"
+    : perclos > CFG.PERCLOS_DROWSY ? "var(--drowsy)" : "var(--alert)";
+
+  // State badge
+  updateStateBadge(state);
+
+  // Camera border
+  updateCameraBorder(state);
+
+  // Alert banner
+  updateAlertBanner(state);
+
+  // Alert log
+  if ((state === "DROWSY" || state === "CRITICAL") &&
+      Date.now() - lastAlertMs > CFG.ALERT_COOLDOWN_MS) {
+    lastAlertMs = Date.now();
+    addAlertLog(state, ear, perclos);
+  }
+
+  // Track peak
+  const rank = { ALERT:0, WARNING:1, DROWSY:2, CRITICAL:3 };
+  if ((rank[state] || 0) > (rank[peakState] || 0)) peakState = state;
+}
+
+// ── State badge ───────────────────────────────────────────────────────────────
+const STATE_META = {
+  ALERT    : { icon:"✓",  label:"ALERT",    color:"#22c55e", bg:"#052e16" },
+  WARNING  : { icon:"⚠",  label:"WARNING",  color:"#f59e0b", bg:"#431407" },
+  DROWSY   : { icon:"😴", label:"DROWSY",   color:"#f97316", bg:"#431407" },
+  CRITICAL : { icon:"🚨", label:"CRITICAL", color:"#ef4444", bg:"#450a0a" },
+};
+
+function updateStateBadge(state) {
+  const m  = STATE_META[state] || STATE_META.ALERT;
+  const el = document.getElementById("state-badge");
+  el.textContent   = m.icon + " " + m.label;
+  el.style.color   = m.color;
+  el.style.background  = m.bg;
+  el.style.borderColor = m.color;
+  // Overlay on camera
+  const ov = document.getElementById("state-overlay");
+  ov.innerHTML = `<div class="state-badge" style="color:${m.color};background:${m.bg};border-color:${m.color}">${m.icon} ${m.label}</div>`;
+}
+
+function updateCameraBorder(state) {
+  const m   = STATE_META[state] || STATE_META.ALERT;
+  const el  = document.getElementById("camera-panel");
+  el.style.borderColor = m.color;
+  const ov  = document.getElementById("camera-overlay");
+  ov.style.boxShadow = state !== "ALERT"
+    ? `inset 0 0 40px ${m.color}40` : "none";
+}
+
+function resetCameraBorder() {
+  document.getElementById("camera-panel").style.borderColor = "var(--border)";
+  document.getElementById("camera-overlay").style.boxShadow = "none";
+}
+
+function updateAlertBanner(state) {
+  const banner = document.getElementById("alert-banner");
+  if (state === "ALERT") { banner.style.display = "none"; return; }
+  const m = STATE_META[state];
+  const msgs = {
+    WARNING  : "⚠  DROWSINESS WARNING — Stay alert!",
+    DROWSY   : "😴  DROWSY DETECTED — Take a break!",
+    CRITICAL : "🚨  CRITICAL — STOP DRIVING NOW!",
+  };
+  banner.style.display = "block";
+  banner.style.background = m.bg;
+  banner.style.color      = m.color;
+  banner.style.borderColor = m.color;
+  banner.textContent = msgs[state] || "";
+}
+
+// ── Alert log ─────────────────────────────────────────────────────────────────
+function addAlertLog(state, ear, perclos) {
+  const m      = STATE_META[state];
+  const ts     = new Date().toLocaleTimeString();
+  const detail = `EAR ${ear.toFixed(2)} · PERCLOS ${(perclos * 100).toFixed(0)}%`;
+  const log    = document.getElementById("alert-log");
+
+  // Clear empty placeholder
+  const empty = log.querySelector("div[style]");
+  if (empty) empty.remove();
+
+  const entry = document.createElement("div");
+  entry.className = "log-entry";
+  entry.style.background   = m.bg;
+  entry.style.borderColor  = m.color + "40";
+  entry.innerHTML = `
+    <span style="font-size:16px">${m.icon}</span>
+    <div>
+      <div class="log-state" style="color:${m.color}">${state}</div>
+      <div class="log-detail">${ts} · ${detail}</div>
+    </div>`;
+  log.insertBefore(entry, log.firstChild);
+  if (log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+function addSession(durationSec, state) {
+  sessionCount++;
+  const m   = STATE_META[state] || STATE_META.ALERT;
+  const dur = formatTime(durationSec);
+  const ts  = new Date().toLocaleString();
+  const list = document.getElementById("sessions-list");
+  const empty = list.querySelector("div[style]");
+  if (empty) empty.remove();
+
+  const row = document.createElement("div");
+  row.className = "session-row";
+  row.innerHTML = `
+    <div>
+      <div class="sess-name">Session ${sessionCount} · ${dur}</div>
+      <div class="sess-date">${ts}</div>
+    </div>
+    <div class="state-badge" style="color:${m.color};background:${m.bg};border-color:${m.color}">
+      ${m.icon} ${state}
+    </div>`;
+  list.insertBefore(row, list.firstChild);
+}
+
+function formatTime(secs) {
+  const m = String(Math.floor(secs / 60)).padStart(2, "0");
+  const s = String(secs % 60).padStart(2, "0");
+  return m + ":" + s;
+}
+
+// ── Sparklines (canvas) ───────────────────────────────────────────────────────
+function drawSparkline(canvasId, data, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const max = Math.max(...data, 0.001);
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 1.5;
+  ctx.lineJoin    = "round";
+
+  data.forEach((v, i) => {
+    const x = (i / (data.length - 1)) * W;
+    const y = H - (v / max) * H;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+</script>
+</body>
+</html>

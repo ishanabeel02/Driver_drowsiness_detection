@@ -1,0 +1,42 @@
+# ══════════════════════════════════════════════════════════
+# Drowsiness Detection — Python Requirements
+# ══════════════════════════════════════════════════════════
+
+# ── Core ──────────────────────────────────────────────────
+numpy>=1.24.0
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+
+# ── Deep learning (Part A — CNN baseline) ─────────────────
+tensorflow>=2.13.0          # or tensorflow-gpu for GPU training
+
+# ── Data / evaluation ─────────────────────────────────────
+scikit-learn>=1.3.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+Pillow>=10.0.0
+
+# ── Audio alerts (Part B — optional) ─────────────────────
+pygame>=2.5.0
+
+# ── Kaggle-specific (pre-installed on Kaggle kernels) ─────
+# kaggle
+# ipykernel
+# ipywidgets
+
+# ══════════════════════════════════════════════════════════
+# Installation
+# ══════════════════════════════════════════════════════════
+#
+# Kaggle kernel (Part A notebook):
+#   All packages above are pre-installed except mediapipe.
+#   Add this cell at the top of your Kaggle notebook:
+#
+#     !pip install mediapipe pygame -q
+#
+# Local setup (Part B real-time system):
+#
+#     pip install -r requirements.txt
+#
+# ══════════════════════════════════════════════════════════
