@@ -1,3 +1,5 @@
+
+
 # Driver Drowsiness Detection System
 
 Real-time driver drowsiness detection using MediaPipe Face Mesh, EAR/PERCLOS eye tracking, and MAR-based yawn detection, with a live WebSocket dashboard.
@@ -52,6 +54,11 @@ Then open `dashboard.html` in your browser.
 ## Tech Stack
 
 MediaPipe · OpenCV · WebSockets · TensorFlow (CNN baseline) · pygame
+## Demo
+
+
+https://github.com/user-attachments/assets/9a1eb72c-4a1f-4c13-8409-5b7b22c09af0
+
 
 ## Author
 
